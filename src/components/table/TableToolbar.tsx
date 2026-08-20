@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Table as TableInstance, Column, Row } from '@tanstack/react-table';
 import {
   Search,
@@ -38,9 +38,23 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
 }) => {
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const columnFilters = table.getState().columnFilters;
   const activeFiltersCount = columnFilters.length + (globalFilter ? 1 : 0);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExportMenu]);
 
   const handleClearAllFilters = () => {
     table.resetColumnFilters();
@@ -63,7 +77,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   };
 
   return (
-    <div className="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 backdrop-blur-md">
+    <div className="relative z-30 px-4 py-3 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
       {/* Left side: Item count & Active filter status */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
@@ -132,7 +146,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
         </button>
 
         {/* Export Dropdown */}
-        <div className="relative">
+        <div className="relative" ref={exportMenuRef}>
           <button
             onClick={() => setShowExportMenu(!showExportMenu)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition cursor-pointer shadow-md shadow-indigo-950/40"
@@ -143,19 +157,19 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
           </button>
 
           {showExportMenu && (
-            <div className="absolute right-0 top-full mt-1.5 w-40 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-40 animate-in fade-in duration-100">
+            <div className="absolute right-0 top-full mt-1.5 w-44 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 animate-in fade-in duration-100">
               <button
                 onClick={handleExportCSV}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 text-xs transition cursor-pointer"
+                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-slate-800 text-slate-200 text-xs transition cursor-pointer text-left"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>Export as CSV</span>
               </button>
               <button
                 onClick={handleExportJSON}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 text-xs transition cursor-pointer"
+                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-slate-800 text-slate-200 text-xs transition cursor-pointer text-left"
               >
-                <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                <FileCode className="w-4 h-4 text-indigo-400 shrink-0" />
                 <span>Export as JSON</span>
               </button>
             </div>
