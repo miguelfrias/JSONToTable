@@ -8,6 +8,8 @@ import {
   X,
   RotateCcw,
   ArrowLeftRight,
+  Save,
+  Check,
 } from 'lucide-react';
 import { ColumnVisibilityMenu } from './ColumnVisibilityMenu';
 import { ColumnReorderModal } from './ColumnReorderModal';
@@ -24,6 +26,8 @@ interface TableToolbarProps {
   setColumnOrder: (order: string[]) => void;
   defaultColumnOrder: string[];
   rawRows?: any[];
+  onSaveState?: () => void;
+  lastSavedTime?: number | null;
 }
 
 export const TableToolbar: React.FC<TableToolbarProps> = ({
@@ -35,9 +39,12 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
   columnOrder,
   setColumnOrder,
   defaultColumnOrder,
+  onSaveState,
+  lastSavedTime,
 }) => {
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const columnFilters = table.getState().columnFilters;
@@ -55,6 +62,14 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showExportMenu]);
+
+  const handleManualSave = () => {
+    if (onSaveState) {
+      onSaveState();
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2500);
+    }
+  };
 
   const handleClearAllFilters = () => {
     table.resetColumnFilters();
@@ -110,7 +125,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
         </div>
       </div>
 
-      {/* Right side: Global search, Column Visibility, Reorder, Export */}
+      {/* Right side: Global search, Save View, Column Visibility, Reorder, Export */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Global Search Input */}
         <div className="relative">
@@ -120,7 +135,7 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             value={globalFilter ?? ''}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder="Global search..."
-            className="bg-slate-950 border border-slate-750 focus:border-indigo-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition w-44 md:w-56"
+            className="bg-slate-950 border border-slate-750 focus:border-indigo-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition w-40 md:w-48"
           />
           {globalFilter && (
             <button
@@ -131,6 +146,35 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
             </button>
           )}
         </div>
+
+        {/* Manual Save State Button */}
+        {onSaveState && (
+          <button
+            onClick={handleManualSave}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer shadow-sm ${
+              justSaved
+                ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                : 'bg-slate-850 hover:bg-slate-800 border-slate-750 text-slate-200 hover:text-white hover:border-slate-600'
+            }`}
+            title={
+              lastSavedTime
+                ? `Save current table layout & data (Last saved: ${new Date(lastSavedTime).toLocaleTimeString()})`
+                : 'Save current table layout & data'
+            }
+          >
+            {justSaved ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Saved!</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Save State</span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Column Visibility Selector */}
         <ColumnVisibilityMenu table={table} />

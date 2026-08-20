@@ -7,6 +7,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
+  type ColumnSizingState,
   type ColumnDef,
   flexRender,
   type HeaderGroup,
@@ -15,7 +16,7 @@ import {
   type Column,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { TableRowData } from '../../types/table';
+import type { TableRowData, TableSnapshot } from '../../types/table';
 import { extractUniqueColumnKeys } from '../../utils/tableHelper';
 import { TableHeaderCell } from './TableHeaderCell';
 import { TableRowCell } from './TableRowCell';
@@ -26,15 +27,33 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 interface VirtualTableProps {
   data: TableRowData[];
   onLoadSample?: () => void;
+  globalFilter?: string;
+  setGlobalFilter?: (value: string) => void;
+  snapshot?: TableSnapshot | null;
+  onSaveSnapshot?: () => void;
 }
 
-export const VirtualTable: React.FC<VirtualTableProps> = ({ data, onLoadSample }) => {
+export const VirtualTable: React.FC<VirtualTableProps> = ({
+  data,
+  onLoadSample,
+  globalFilter: controlledGlobalFilter,
+  setGlobalFilter: controlledSetGlobalFilter,
+  snapshot,
+  onSaveSnapshot,
+}) => {
+  // Extract unique column keys
+  const uniqueKeys = useMemo(() => extractUniqueColumnKeys(data), [data]);
+
   // Table states
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState('');
+  const [internalGlobalFilter, setInternalGlobalFilter] = useState('');
+  const globalFilter = controlledGlobalFilter !== undefined ? controlledGlobalFilter : internalGlobalFilter;
+  const setGlobalFilter = controlledSetGlobalFilter || setInternalGlobalFilter;
+
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [draggedColId, setDraggedColId] = useState<string | null>(null);
 
   // Generate dynamic column definitions
@@ -43,16 +62,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ data, onLoadSample }
       return { columns: [], defaultColumnOrder: [] };
     }
 
-    const uniqueKeys = extractUniqueColumnKeys(data);
     const cols: ColumnDef<TableRowData, any>[] = uniqueKeys.map(({ key }) => ({
       id: key,
       accessorKey: key,
       header: key,
       size: 180,
       minSize: 80,
-      maxSize: 600, // Allows user to expand past 300 if desired
+      maxSize: 600,
       cell: (info) => <TableRowCell value={info.getValue()} columnId={key} />,
-      // Custom filter function matching strings, numbers, booleans, nested text
       filterFn: (row: any, columnId: string, filterValue: string) => {
         const value = row.getValue(columnId);
         if (value === null || value === undefined) return false;
@@ -63,14 +80,30 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ data, onLoadSample }
 
     const defaultOrder = cols.map((c) => c.id as string);
     return { columns: cols, defaultColumnOrder: defaultOrder };
-  }, [data]);
+  }, [data, uniqueKeys]);
 
-  // Sync column order when columns structure changes
+  // Sync snapshot configuration when active snapshot changes
   useEffect(() => {
-    if (defaultColumnOrder.length > 0) {
+    if (snapshot) {
+      if (snapshot.columnOrder && snapshot.columnOrder.length > 0) {
+        setColumnOrder(snapshot.columnOrder);
+      }
+      if (snapshot.columnVisibility) {
+        setColumnVisibility(snapshot.columnVisibility);
+      }
+      if (snapshot.columnSizing) {
+        setColumnSizing(snapshot.columnSizing);
+      }
+      if (snapshot.sorting) {
+        setSorting(snapshot.sorting);
+      }
+      if (snapshot.columnFilters) {
+        setColumnFilters(snapshot.columnFilters);
+      }
+    } else if (defaultColumnOrder.length > 0) {
       setColumnOrder(defaultColumnOrder);
     }
-  }, [defaultColumnOrder]);
+  }, [snapshot, defaultColumnOrder]);
 
   // TanStack Table Instance
   const table = useReactTable({
@@ -82,12 +115,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ data, onLoadSample }
       globalFilter,
       columnVisibility,
       columnOrder,
+      columnSizing,
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnOrderChange: setColumnOrder,
+    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -167,7 +202,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ data, onLoadSample }
   }
 
   const visibleLeafColumns = table.getVisibleLeafColumns();
-  const totalTableWidth = visibleLeafColumns.reduce((sum: number, col: Column<TableRowData, unknown>) => sum + col.getSize(), 0);
+  const totalTableWidth = visibleLeafColumns.reduce(
+    (sum: number, col: Column<TableRowData, unknown>) => sum + col.getSize(),
+    0
+  );
 
   return (
     <ErrorBoundary fallbackTitle="Table Rendering Error">
@@ -183,6 +221,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({ data, onLoadSample }
           setColumnOrder={setColumnOrder}
           defaultColumnOrder={defaultColumnOrder}
           rawRows={data}
+          onSaveState={onSaveSnapshot}
         />
 
         {/* If rows exist but filtered down to 0 */}

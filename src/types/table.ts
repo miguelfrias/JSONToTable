@@ -1,3 +1,5 @@
+import type { VisibilityState, ColumnSizingState, SortingState, ColumnFiltersState } from '@tanstack/react-table';
+
 export type InputSourceType = 'raw' | 'url';
 
 export interface ParseError {
@@ -30,3 +32,24 @@ export interface SampleDataset {
   path?: string;
   data: any;
 }
+
+export interface TableSnapshot {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  sourceType: InputSourceType;
+  url?: string;
+  rawJson?: string;
+  jsonPath: string;
+  globalFilter?: string;
+  columnOrder?: string[];
+  columnVisibility?: VisibilityState;
+  columnSizing?: ColumnSizingState;
+  sorting?: SortingState;
+  columnFilters?: ColumnFiltersState;
+  rowCount?: number;
+  columnCount?: number;
+}
+
+export type SnapshotMetadata = Omit<TableSnapshot, 'rawJson'>;
