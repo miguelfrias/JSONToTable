@@ -1,5 +1,6 @@
 import { get, set, del } from 'idb-keyval';
 import type { TableSnapshot, SnapshotMetadata } from '../types/table';
+import { customIdbStore } from './idbStore';
 
 const SNAPSHOT_INDEX_KEY = 'json_table_snapshots_index_v1';
 const SNAPSHOT_DATA_PREFIX = 'json_table_snapshot_';
@@ -9,7 +10,7 @@ const SNAPSHOT_DATA_PREFIX = 'json_table_snapshot_';
  */
 export async function listAllSnapshotsFromDB(): Promise<SnapshotMetadata[]> {
   try {
-    const list = await get<SnapshotMetadata[]>(SNAPSHOT_INDEX_KEY);
+    const list = await get<SnapshotMetadata[]>(SNAPSHOT_INDEX_KEY, customIdbStore);
     return list || [];
   } catch (err) {
     console.warn('Failed to list snapshots from IndexedDB:', err);
@@ -18,12 +19,12 @@ export async function listAllSnapshotsFromDB(): Promise<SnapshotMetadata[]> {
 }
 
 /**
- * Saves or updates a snapshot in IndexedDB
+ * Saves or updates a snapshot in isolated IndexedDB
  */
 export async function saveSnapshotToDB(snapshot: TableSnapshot): Promise<void> {
   try {
     // 1. Save full snapshot payload
-    await set(`${SNAPSHOT_DATA_PREFIX}${snapshot.id}`, snapshot);
+    await set(`${SNAPSHOT_DATA_PREFIX}${snapshot.id}`, snapshot, customIdbStore);
 
     // 2. Update index list (metadata only)
     const existingList = await listAllSnapshotsFromDB();
@@ -54,7 +55,7 @@ export async function saveSnapshotToDB(snapshot: TableSnapshot): Promise<void> {
       updatedList = [metadata, ...existingList];
     }
 
-    await set(SNAPSHOT_INDEX_KEY, updatedList);
+    await set(SNAPSHOT_INDEX_KEY, updatedList, customIdbStore);
   } catch (err) {
     console.warn('Failed to save snapshot to IndexedDB:', err);
     throw err;
@@ -66,7 +67,7 @@ export async function saveSnapshotToDB(snapshot: TableSnapshot): Promise<void> {
  */
 export async function loadSnapshotFromDB(id: string): Promise<TableSnapshot | null> {
   try {
-    const data = await get<TableSnapshot>(`${SNAPSHOT_DATA_PREFIX}${id}`);
+    const data = await get<TableSnapshot>(`${SNAPSHOT_DATA_PREFIX}${id}`, customIdbStore);
     return data || null;
   } catch (err) {
     console.warn(`Failed to load snapshot ${id} from IndexedDB:`, err);
@@ -75,14 +76,14 @@ export async function loadSnapshotFromDB(id: string): Promise<TableSnapshot | nu
 }
 
 /**
- * Deletes a snapshot from IndexedDB
+ * Deletes a snapshot from isolated IndexedDB
  */
 export async function deleteSnapshotFromDB(id: string): Promise<void> {
   try {
-    await del(`${SNAPSHOT_DATA_PREFIX}${id}`);
+    await del(`${SNAPSHOT_DATA_PREFIX}${id}`, customIdbStore);
     const existingList = await listAllSnapshotsFromDB();
     const updatedList = existingList.filter((item) => item.id !== id);
-    await set(SNAPSHOT_INDEX_KEY, updatedList);
+    await set(SNAPSHOT_INDEX_KEY, updatedList, customIdbStore);
   } catch (err) {
     console.warn(`Failed to delete snapshot ${id} from IndexedDB:`, err);
     throw err;

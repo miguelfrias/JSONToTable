@@ -1,6 +1,7 @@
 import { entries, del, clear, get, set } from 'idb-keyval';
 import type { TableSnapshot } from '../types/table';
 import { listAllSnapshotsFromDB, saveSnapshotToDB } from './snapshotStorage';
+import { customIdbStore } from './idbStore';
 
 export interface StorageItemDetail {
   key: string;
@@ -36,11 +37,11 @@ export function formatByteSize(bytes: number): string {
 }
 
 /**
- * Retrieves all raw entries from IndexedDB with metadata and categorization
+ * Retrieves all raw entries from the isolated IndexedDB database
  */
 export async function getAllIndexedDbEntries(): Promise<StorageItemDetail[]> {
   try {
-    const rawEntries = await entries();
+    const rawEntries = await entries(customIdbStore);
     return rawEntries.map(([key, value]) => {
       const keyStr = String(key);
       const sizeBytes = calculateValueSizeBytes(value);
@@ -93,18 +94,18 @@ export async function getAllIndexedDbEntries(): Promise<StorageItemDetail[]> {
 }
 
 /**
- * Deletes any individual key from IndexedDB
+ * Deletes any individual key from the isolated IndexedDB store
  */
 export async function deleteIndexedDbKey(key: string): Promise<void> {
   try {
-    await del(key);
+    await del(key, customIdbStore);
 
     // If it was a snapshot, also remove from index
     if (key.startsWith('json_table_snapshot_')) {
       const snapshotId = key.replace('json_table_snapshot_', '');
       const existingList = await listAllSnapshotsFromDB();
       const updated = existingList.filter((s) => s.id !== snapshotId);
-      await set('json_table_snapshots_index_v1', updated);
+      await set('json_table_snapshots_index_v1', updated, customIdbStore);
     }
   } catch (err) {
     console.error(`Failed to delete key ${key}:`, err);
@@ -116,7 +117,7 @@ export async function deleteIndexedDbKey(key: string): Promise<void> {
  * Converts a legacy data payload entry into a proper named snapshot with a UUID
  */
 export async function convertLegacyPayloadToSnapshot(legacyKey = 'json_table_data_payload'): Promise<string> {
-  const rawData = await get<string>(legacyKey);
+  const rawData = await get<string>(legacyKey, customIdbStore);
   if (!rawData) {
     throw new Error('No legacy data payload found.');
   }
@@ -148,18 +149,24 @@ export async function convertLegacyPayloadToSnapshot(legacyKey = 'json_table_dat
 
   await saveSnapshotToDB(snapshot);
   // Remove legacy key after successful conversion
-  await del(legacyKey);
+  await del(legacyKey, customIdbStore);
 
   return id;
 }
 
 /**
- * Completely wipes all IndexedDB entries and localStorage for this application
+ * Completely wipes the isolated IndexedDB database and app-specific localStorage without touching other origin data
  */
 export async function clearAllAppStorage(): Promise<void> {
   try {
-    await clear();
-    localStorage.clear();
+    await clear(customIdbStore);
+    // Clear only app-scoped localStorage keys
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('json_table_') || key.startsWith('json_to_table_'))) {
+        localStorage.removeItem(key);
+      }
+    }
   } catch (err) {
     console.error('Failed to clear entire storage:', err);
     throw err;
